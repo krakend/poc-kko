@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -329,12 +331,43 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// The CRD API is defining that the Memcached type, have a MemcachedSpec.Size field
-	// to set the quantity of Deployment instances is the desired state on the cluster.
-	// Therefore, the following code will ensure the Deployment size is the same as defined
-	// via the Size spec of the Custom Resource which we are reconciling.
-	if *found.Spec.Replicas != krakend.Spec.Replicas {
-		found.Spec.Replicas = &krakend.Spec.Replicas
+	// update the configmap and check if a rolling restart is required
+	configmap := &corev1.ConfigMap{}
+	if err = r.Get(ctx, types.NamespacedName{Name: krakend.Name + "-cm", Namespace: krakend.Namespace}, configmap); err != nil {
+		log.Error(err, "Failed to get ConfigMap")
+		// Let's return the error for the reconciliation be re-trigged again
+		return ctrl.Result{}, err
+	}
+	prevKrakend := &gatewayv1alpha1.KrakenDSpec{}
+	json.Unmarshal([]byte(configmap.Data["krakend.json"]), prevKrakend)
+
+	if !reflect.DeepEqual(krakend.Spec, *prevKrakend) {
+		// update the configmap
+		nextKrakendRaw := map[string]interface{}{}
+		b, _ := json.Marshal(krakend.Spec)
+		json.Unmarshal(b, &nextKrakendRaw)
+		prevKrakendRaw := map[string]interface{}{}
+		json.Unmarshal([]byte(configmap.Data["krakend.json"]), &prevKrakendRaw)
+
+		if es, ok := prevKrakendRaw["endpoints"]; ok {
+			nextKrakendRaw["endpoints"] = es
+		}
+		if aas, ok := nextKrakendRaw["async_agents"]; ok {
+			nextKrakendRaw["async_agents"] = aas
+		}
+
+		b, _ = json.Marshal(nextKrakendRaw)
+		configmap.Data["krakend.json"] = string(b)
+		r.Update(ctx, configmap)
+
+		// The CRD API is defining that the Memcached type, have a MemcachedSpec.Size field
+		// to set the quantity of Deployment instances is the desired state on the cluster.
+		// Therefore, the following code will ensure the Deployment size is the same as defined
+		// via the Size spec of the Custom Resource which we are reconciling.
+		if *found.Spec.Replicas != krakend.Spec.Replicas {
+			found.Spec.Replicas = &krakend.Spec.Replicas
+		}
+
 		if err = r.Update(ctx, found); err != nil {
 			log.Error(err, "Failed to update Deployment",
 				"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
@@ -365,6 +398,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// so that we can ensure that we have the latest state of the resource before
 		// update. Also, it will help ensure the desired state on the cluster
 		return ctrl.Result{Requeue: true}, nil
+
 	}
 
 	// The following implementation will update the status
