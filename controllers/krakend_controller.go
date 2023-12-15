@@ -502,9 +502,7 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							RunAsUser:                &[]int64{1001}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
 							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{
-									"ALL",
-								},
+								Drop: []corev1.Capability{"ALL"},
 							},
 						},
 						Ports: []corev1.ContainerPort{{
@@ -512,14 +510,24 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							Name:          "krakend",
 						}},
 						Command: []string{"krakend", "run", "-c", "/config/krakend.json"},
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      "config",
-								MountPath: "/config",
-								ReadOnly:  true,
-							},
-						},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      "config",
+							MountPath: "/config",
+							ReadOnly:  true,
+						}},
 					}},
+				},
+			},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxUnavailable: &intstr.IntOrString{
+						Type: intstr.Int,
+					},
+					MaxSurge: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: krakend.Spec.Replicas/2 + 1,
+					},
 				},
 			},
 		},
