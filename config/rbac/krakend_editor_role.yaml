@@ -1,0 +1,31 @@
+# permissions for end users to edit krakends.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: krakend-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: krakend-operator
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: krakend-editor-role
+rules:
+- apiGroups:
+  - gateway.krakend.io
+  resources:
+  - krakends
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.krakend.io
+  resources:
+  - krakends/status
+  verbs:
+  - get

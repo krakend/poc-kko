@@ -1,0 +1,17 @@
+apiVersion: gateway.krakend.io/v1alpha1
+kind: KrakenD
+metadata:
+  labels:
+    app.kubernetes.io/name: krakend
+    app.kubernetes.io/instance: krakend-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+  name: krakend-sample
+spec:
+  port: 8080
+  name: "The main gateway"
+  version: 3
+  debug_endpoint: true
+  echo_endpoint: true
+  replicas: 3
