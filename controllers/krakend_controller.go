@@ -500,6 +500,7 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 					//},
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &[]bool{true}[0],
+						RunAsUser:    &[]int64{1000}[0],
 						// IMPORTANT: seccomProfile was introduced with Kubernetes 1.19
 						// If you are looking for to produce solutions to be supported
 						// on lower versions you must remove this option.
@@ -553,10 +554,10 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							ContainerPort: krakend.Spec.Port,
 							Name:          "krakend",
 						}},
-						// Command: []string{"krakend", "run", "-c", "/etc/krakend/config/krakend.json"},
+						Command: []string{"krakend", "run", "-c", "/etc/krakend/config/krakend.json"},
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      "config",
-							MountPath: "/etc/krakend",
+							MountPath: "/etc/krakend/config",
 							ReadOnly:  true,
 						}},
 					}},
