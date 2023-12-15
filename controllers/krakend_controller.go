@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -178,8 +179,6 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				log.Error(err, "Failed to remove finalizer for KrakenD")
 				return ctrl.Result{}, err
 			}
-
-			// TODO: remove the service and the ingress rule
 		}
 		return ctrl.Result{}, nil
 	}
@@ -188,8 +187,30 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	found := &appsv1.Deployment{}
 	err = r.Get(ctx, types.NamespacedName{Name: krakend.Name, Namespace: krakend.Namespace}, found)
 	if err != nil && apierrors.IsNotFound(err) {
+		// Define a new configmap
+		b, err := json.Marshal(krakend.Spec)
+		if err != nil {
+			log.Error(err, "Failed to marshal the new KrakenD: "+err.Error(),
+				"KrakenD.Namespace", krakend.Namespace, "KrakenD.Name", krakend.Name)
+			return ctrl.Result{}, err
+		}
+		configmap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: krakend.Name + "-cm", Namespace: krakend.Namespace},
+			Data:       map[string]string{"krakend.json": string(b)},
+		}
+
+		if err := ctrl.SetControllerReference(krakend, configmap, r.Scheme); err != nil {
+			log.Error(err, "Failed to set controller for the new ConfigMap",
+				"ConfigMap.Namespace", krakend.Namespace, "ConfigMap.Name", krakend.Name+"-CM")
+		}
+
+		if err := r.Create(ctx, configmap); err != nil {
+			log.Error(err, "Failed to create ConfigMap",
+				"ConfigMap.Namespace", krakend.Namespace, "ConfigMap.Name", krakend.Name+"-CM")
+		}
+
 		// Define a new deployment
-		dep, err := r.deploymentForKrakenD(krakend)
+		dep, err := r.deploymentForKrakenD(krakend, configmap)
 		if err != nil {
 			log.Error(err, "Failed to define new Deployment resource for KrakenD")
 
@@ -214,6 +235,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 
+		// Define a new service
 		service := &corev1.Service{}
 		if err := r.Get(ctx, types.NamespacedName{Name: krakend.Name + "-service", Namespace: krakend.Namespace}, service); err != nil && apierrors.IsNotFound(err) {
 			service.ObjectMeta = metav1.ObjectMeta{
@@ -380,7 +402,7 @@ func (r *KrakenDReconciler) doFinalizerOperationsForKrakenD(cr *gatewayv1alpha1.
 
 // deploymentForKrakenD returns a KrakenD Deployment object
 func (r *KrakenDReconciler) deploymentForKrakenD(
-	krakend *gatewayv1alpha1.KrakenD) (*appsv1.Deployment, error) {
+	krakend *gatewayv1alpha1.KrakenD, configmap *corev1.ConfigMap) (*appsv1.Deployment, error) {
 	ls := labelsForKrakenD(krakend.Name)
 
 	// Get the Operand image
@@ -441,6 +463,24 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: configmap.Name,
+									},
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "krakend.json",
+											Path: "krakend.json",
+										},
+									},
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{{
 						Image:           image,
 						Name:            "krakend",
@@ -471,8 +511,14 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							ContainerPort: krakend.Spec.Port,
 							Name:          "krakend",
 						}},
-						Command: []string{"krakend", "run", "-d", "-c", "/etc/krakend/krakend.json"},
-						//
+						Command: []string{"krakend", "run", "-c", "/config/krakend.json"},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "config",
+								MountPath: "/config",
+								ReadOnly:  true,
+							},
+						},
 					}},
 				},
 			},
@@ -518,6 +564,7 @@ func imageForKrakenD() (string, error) {
 func (r *KrakenDReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gatewayv1alpha1.KrakenD{}).
+		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
