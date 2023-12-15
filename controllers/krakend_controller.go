@@ -51,6 +51,8 @@ const (
 	typeAvailableKrakenD = "Available"
 	// typeDegradedKrakenD represents the status used when the custom resource is deleted and the finalizer operations are must to occur.
 	typeDegradedKrakenD = "Degraded"
+
+	configFilePath = "krakend.json"
 )
 
 // KrakenDReconciler reconciles a KrakenD object
@@ -198,7 +200,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		configmap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{Name: krakend.Name + "-cm", Namespace: krakend.Namespace},
-			Data:       map[string]string{"krakend.json": string(b)},
+			Data:       map[string]string{configFilePath: string(b)},
 		}
 
 		if err := ctrl.SetControllerReference(krakend, configmap, r.Scheme); err != nil {
@@ -339,7 +341,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 	prevKrakend := &gatewayv1alpha1.KrakenDSpec{}
-	json.Unmarshal([]byte(configmap.Data["krakend.json"]), prevKrakend)
+	json.Unmarshal([]byte(configmap.Data[configFilePath]), prevKrakend)
 
 	if !reflect.DeepEqual(krakend.Spec, *prevKrakend) {
 		// update the configmap
@@ -347,7 +349,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		b, _ := json.Marshal(krakend.Spec)
 		json.Unmarshal(b, &nextKrakendRaw)
 		prevKrakendRaw := map[string]interface{}{}
-		json.Unmarshal([]byte(configmap.Data["krakend.json"]), &prevKrakendRaw)
+		json.Unmarshal([]byte(configmap.Data[configFilePath]), &prevKrakendRaw)
 
 		if es, ok := prevKrakendRaw["endpoints"]; ok {
 			nextKrakendRaw["endpoints"] = es
@@ -356,9 +358,14 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			nextKrakendRaw["async_agents"] = aas
 		}
 
+		log.Info("Updating the ConfigMap",
+			"ConfigMap.Namespace", krakend.Namespace, "ConfigMap.Name", krakend.Name+"-cm")
 		b, _ = json.Marshal(nextKrakendRaw)
-		configmap.Data["krakend.json"] = string(b)
-		r.Update(ctx, configmap)
+		configmap.Data[configFilePath] = string(b)
+		if err := r.Update(ctx, configmap); err != nil {
+			log.Error(err, "Failed to update ConfigMap",
+				"ConfigMap.Namespace", krakend.Namespace, "ConfigMap.Name", krakend.Name+"-cm")
+		}
 
 		// The CRD API is defining that the Memcached type, have a MemcachedSpec.Size field
 		// to set the quantity of Deployment instances is the desired state on the cluster.
@@ -366,6 +373,9 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// via the Size spec of the Custom Resource which we are reconciling.
 		if *found.Spec.Replicas != krakend.Spec.Replicas {
 			found.Spec.Replicas = &krakend.Spec.Replicas
+		}
+		if found.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort != krakend.Spec.Port {
+			found.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort = krakend.Spec.Port
 		}
 
 		if err = r.Update(ctx, found); err != nil {
@@ -507,8 +517,8 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 									},
 									Items: []corev1.KeyToPath{
 										{
-											Key:  "krakend.json",
-											Path: "krakend.json",
+											Key:  configFilePath,
+											Path: configFilePath,
 										},
 									},
 								},
@@ -533,7 +543,7 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							// container to a non-zero numeric user. We do this using the RunAsUser field.
 							// However, if you are looking to provide solution for K8s vendors like OpenShift
 							// be aware that you cannot run under its restricted-v2 SCC if you set this value.
-							RunAsUser:                &[]int64{1001}[0],
+							RunAsUser:                &[]int64{1000}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
 							Capabilities: &corev1.Capabilities{
 								Drop: []corev1.Capability{"ALL"},
@@ -543,10 +553,10 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							ContainerPort: krakend.Spec.Port,
 							Name:          "krakend",
 						}},
-						Command: []string{"krakend", "run", "-c", "/config/krakend.json"},
+						// Command: []string{"krakend", "run", "-c", "/etc/krakend/config/krakend.json"},
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      "config",
-							MountPath: "/config",
+							MountPath: "/etc/krakend",
 							ReadOnly:  true,
 						}},
 					}},
