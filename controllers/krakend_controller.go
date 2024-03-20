@@ -52,8 +52,13 @@ const (
 	// typeDegradedKrakenD represents the status used when the custom resource is deleted and the finalizer operations are must to occur.
 	typeDegradedKrakenD = "Degraded"
 
-	configFilePath = "krakend.json"
+	configFilePath = "krakend-k8s.json"
 )
+
+type KrakendConfig struct {
+	gatewayv1alpha1.KrakenDSpec
+	Endpoints []gatewayv1alpha1.EndpointSpec `json:"endpoints"`
+}
 
 // KrakenDReconciler reconciles a KrakenD object
 type KrakenDReconciler struct {
@@ -192,14 +197,18 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	err = r.Get(ctx, types.NamespacedName{Name: krakend.Name, Namespace: krakend.Namespace}, found)
 	if err != nil && apierrors.IsNotFound(err) {
 		// Define a new configmap
-		b, err := json.Marshal(krakend.Spec)
+		b, err := json.Marshal(KrakendConfig{
+			KrakenDSpec: krakend.Spec,
+			Endpoints:   []gatewayv1alpha1.EndpointSpec{},
+		})
 		if err != nil {
 			log.Error(err, "Failed to marshal the new KrakenD: "+err.Error(),
 				"KrakenD.Namespace", krakend.Namespace, "KrakenD.Name", krakend.Name)
 			return ctrl.Result{}, err
 		}
+		nscm := getConfigMapNamespacedName(krakend)
 		configmap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: krakend.Name + "-cm", Namespace: krakend.Namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: nscm.Name, Namespace: nscm.Namespace},
 			Data:       map[string]string{configFilePath: string(b)},
 		}
 
@@ -270,10 +279,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				return ctrl.Result{}, err
 			}
 		} else if err != nil {
-			log.Error(
-				err,
-				"Failed to find the service",
-			)
+			log.Error(err, "Failed to find the service")
 		}
 
 		ingress := &networkingv1.Ingress{}
@@ -335,7 +341,8 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// update the configmap and check if a rolling restart is required
 	configmap := &corev1.ConfigMap{}
-	if err = r.Get(ctx, types.NamespacedName{Name: krakend.Name + "-cm", Namespace: krakend.Namespace}, configmap); err != nil {
+	cfnn := getConfigMapNamespacedName(krakend)
+	if err = r.Get(ctx, cfnn, configmap); err != nil {
 		log.Error(err, "Failed to get ConfigMap")
 		// Let's return the error for the reconciliation be re-trigged again
 		return ctrl.Result{}, err
@@ -344,71 +351,56 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	json.Unmarshal([]byte(configmap.Data[configFilePath]), prevKrakend)
 
 	if !reflect.DeepEqual(krakend.Spec, *prevKrakend) {
-		// update the configmap
-		nextKrakendRaw := map[string]interface{}{}
-		b, _ := json.Marshal(krakend.Spec)
-		json.Unmarshal(b, &nextKrakendRaw)
-		prevKrakendRaw := map[string]interface{}{}
-		json.Unmarshal([]byte(configmap.Data[configFilePath]), &prevKrakendRaw)
-
-		if es, ok := prevKrakendRaw["endpoints"]; ok {
-			nextKrakendRaw["endpoints"] = es
-		}
-		if aas, ok := nextKrakendRaw["async_agents"]; ok {
-			nextKrakendRaw["async_agents"] = aas
-		}
-
-		log.Info("Updating the ConfigMap",
-			"ConfigMap.Namespace", krakend.Namespace, "ConfigMap.Name", krakend.Name+"-cm")
-		b, _ = json.Marshal(nextKrakendRaw)
-		configmap.Data[configFilePath] = string(b)
-		if err := r.Update(ctx, configmap); err != nil {
-			log.Error(err, "Failed to update ConfigMap",
-				"ConfigMap.Namespace", krakend.Namespace, "ConfigMap.Name", krakend.Name+"-cm")
+		if res, err := updateConfigMap(ctx, r, req.Namespace, req.Name); err != nil {
+			return res, err
 		}
 
 		// The CRD API is defining that the Memcached type, have a MemcachedSpec.Size field
 		// to set the quantity of Deployment instances is the desired state on the cluster.
 		// Therefore, the following code will ensure the Deployment size is the same as defined
 		// via the Size spec of the Custom Resource which we are reconciling.
+		var shouldUpdateDeplyment bool
 		if *found.Spec.Replicas != krakend.Spec.Replicas {
 			found.Spec.Replicas = &krakend.Spec.Replicas
+			shouldUpdateDeplyment = true
 		}
 		if found.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort != krakend.Spec.Port {
 			found.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort = krakend.Spec.Port
+			shouldUpdateDeplyment = true
 		}
 
-		if err = r.Update(ctx, found); err != nil {
-			log.Error(err, "Failed to update Deployment",
-				"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+		if shouldUpdateDeplyment {
+			if err = r.Update(ctx, found); err != nil {
+				log.Error(err, "Failed to update Deployment",
+					"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
 
-			// Re-fetch the krakend Custom Resource before update the status
-			// so that we have the latest state of the resource on the cluster and we will avoid
-			// raise the issue "the object has been modified, please apply
-			// your changes to the latest version and try again" which would re-trigger the reconciliation
-			if err := r.Get(ctx, req.NamespacedName, krakend); err != nil {
-				log.Error(err, "Failed to re-fetch krakend")
+				// Re-fetch the krakend Custom Resource before update the status
+				// so that we have the latest state of the resource on the cluster and we will avoid
+				// raise the issue "the object has been modified, please apply
+				// your changes to the latest version and try again" which would re-trigger the reconciliation
+				if err := r.Get(ctx, req.NamespacedName, krakend); err != nil {
+					log.Error(err, "Failed to re-fetch krakend")
+					return ctrl.Result{}, err
+				}
+
+				// The following implementation will update the status
+				meta.SetStatusCondition(&krakend.Status.Conditions, metav1.Condition{Type: typeAvailableKrakenD,
+					Status: metav1.ConditionFalse, Reason: "Resizing",
+					Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", krakend.Name, err)})
+
+				if err := r.Status().Update(ctx, krakend); err != nil {
+					log.Error(err, "Failed to update KrakenD status")
+					return ctrl.Result{}, err
+				}
+
 				return ctrl.Result{}, err
 			}
 
-			// The following implementation will update the status
-			meta.SetStatusCondition(&krakend.Status.Conditions, metav1.Condition{Type: typeAvailableKrakenD,
-				Status: metav1.ConditionFalse, Reason: "Resizing",
-				Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", krakend.Name, err)})
-
-			if err := r.Status().Update(ctx, krakend); err != nil {
-				log.Error(err, "Failed to update KrakenD status")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
+			// Now, that we update the size we want to requeue the reconciliation
+			// so that we can ensure that we have the latest state of the resource before
+			// update. Also, it will help ensure the desired state on the cluster
+			return ctrl.Result{Requeue: true}, nil
 		}
-
-		// Now, that we update the size we want to requeue the reconciliation
-		// so that we can ensure that we have the latest state of the resource before
-		// update. Also, it will help ensure the desired state on the cluster
-		return ctrl.Result{Requeue: true}, nil
-
 	}
 
 	// The following implementation will update the status
@@ -424,7 +416,7 @@ func (r *KrakenDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
-// finalizeMemcached will perform the required operations before delete the CR.
+// doFinalizerOperationsForKrakenD will perform the required operations before delete the CR.
 func (r *KrakenDReconciler) doFinalizerOperationsForKrakenD(cr *gatewayv1alpha1.KrakenD) {
 	// TODO(user): Add the cleanup steps that the operator
 	// needs to do before the CR can be deleted. Examples
@@ -529,7 +521,13 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 					Containers: []corev1.Container{{
 						Image:           image,
 						Name:            "krakend",
-						ImagePullPolicy: corev1.PullIfNotPresent,
+						ImagePullPolicy: corev1.PullAlways,
+						Env: []corev1.EnvVar{
+							{
+								Name:  "FC_OUT",
+								Value: "/etc/krakend/none.json",
+							},
+						},
 						// Ensure restrictive context for the container
 						// More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
 						SecurityContext: &corev1.SecurityContext{
@@ -554,10 +552,21 @@ func (r *KrakenDReconciler) deploymentForKrakenD(
 							ContainerPort: krakend.Spec.Port,
 							Name:          "krakend",
 						}},
-						Command: []string{"krakend", "run", "-c", "/etc/krakend/config/krakend.json"},
+						Command: []string{
+							"/usr/bin/reflex",
+							"--all",
+							"-G",
+							"none.json",
+							"-s",
+							"--",
+							"/usr/bin/krakend",
+							"run",
+							"-c",
+							"/etc/krakend/" + configFilePath,
+						},
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      "config",
-							MountPath: "/etc/krakend/config",
+							MountPath: "/etc/krakend",
 							ReadOnly:  true,
 						}},
 					}},
@@ -622,4 +631,8 @@ func (r *KrakenDReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
 		Complete(r)
+}
+
+func getConfigMapNamespacedName(krakend *gatewayv1alpha1.KrakenD) types.NamespacedName {
+	return types.NamespacedName{Name: krakend.Name + "-cm", Namespace: krakend.Namespace}
 }

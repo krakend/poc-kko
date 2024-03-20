@@ -1,0 +1,272 @@
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar"
+  backend:
+    - url_pattern: "/__debug/foobar"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo2
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar/4563"
+  backend:
+    - url_pattern: "/__debug/foobar/4563"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo3
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar/{foo}"
+  backend:
+    - url_pattern: "/__debug/foobar/{foo}"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo4
+spec:
+  parent: krakend-sample
+  endpoint: "/bar/{foo}"
+  backend:
+    - url_pattern: "/__debug/bar/{foo}"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo5
+spec:
+  parent: krakend-sample
+  endpoint: "/bar2/{foo}"
+  backend:
+    - url_pattern: "/__debug/bar2/{foo}"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo6
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar2/{foo}"
+  backend:
+    - url_pattern: "/__debug/foobar2/{foo}"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo7
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar20/{foo}"
+  backend:
+    - url_pattern: "/__debug/foobar20/{foo}"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo8
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar2"
+  backend:
+    - url_pattern: "/__debug/foobar2"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo9
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar2ssss"
+  backend:
+    - url_pattern: "/__debug/foobar2sss"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo10
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar12ssss"
+  backend:
+    - url_pattern: "/__debug/foobar12sss"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo11
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar12ssss456"
+  backend:
+    - url_pattern: "/__debug/foobar12sss456"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo12
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar12ssss4567"
+  backend:
+    - url_pattern: "/__debug/foobar12sss4567"
+      host:
+        - "localhost:8080"
+
+---
+
+apiVersion: gateway.krakend.io/v1alpha1
+kind: Endpoint
+metadata:
+  labels:
+    app.kubernetes.io/name: endpoint
+    app.kubernetes.io/instance: endpoint-sample
+    app.kubernetes.io/part-of: krakend-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: krakend-operator
+    gateway.krakend.io/parent: krakend-sample
+  name: endpoint-sample-foo13
+spec:
+  parent: krakend-sample
+  endpoint: "/foobar12ssss45678"
+  backend:
+    - url_pattern: "/__debug/foobar12sss45678"
+      host:
+        - "localhost:8080"
+
+---

@@ -20,4 +20,13 @@ resources:
   kind: KrakenD
   path: github.com/krakend/k8s-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: krakend.io
+  group: gateway
+  kind: Endpoint
+  path: github.com/krakend/k8s-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

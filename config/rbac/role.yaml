@@ -8,6 +8,32 @@ rules:
 - apiGroups:
   - gateway.krakend.io
   resources:
+  - endpoints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.krakend.io
+  resources:
+  - endpoints/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - gateway.krakend.io
+  resources:
+  - endpoints/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - gateway.krakend.io
+  resources:
   - krakends
   verbs:
   - create
