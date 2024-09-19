@@ -1,5 +1,7 @@
 # krakend-operator
-// TODO(user): Add simple overview of use/purpose
+A simple PoC for the KrakenD k8s operator.
+
+**THIS CODE IS NOT READY FOR PRODUCTION**
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use
